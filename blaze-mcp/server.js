@@ -1,28 +1,22 @@
 #!/usr/bin/env node
-// Blaze.ai MCP server (stdio transport).
+// Blaze MCP server (stdio transport).
 //
-// Exposes Blaze.ai as MCP tools so an MCP client (Claude Code, Claude
-// Desktop, etc.) can generate content, schedule campaigns, fetch content,
-// and audit apps. The Blaze API key is read from the BLAZE_API_KEY env var
-// and never passed through the model.
+// Exposes Blaze's GraphQL API as MCP tools so an MCP client (Claude Code,
+// Claude Desktop, etc.) can ping the API, introspect available queries, and
+// run arbitrary GraphQL. The API key is read from BLAZE_API_KEY and never
+// passed through the model.
 //
-// Reuses the request helpers in ../lib/blaze.js, so endpoint paths/auth are
-// configured there (and overridable via env). See ../.env.example.
+// Reuses ../lib/blaze.js. Docs: https://docs.withblaze.app (Alpha).
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import {
-  generateContent,
-  scheduleCampaign,
-  getContent,
-  auditApps,
-} from '../lib/blaze.js';
+import { graphql, ping, introspect } from '../lib/blaze.js';
 
 const server = new McpServer({ name: 'blaze', version: '1.0.0' });
 
-// Wrap a helper so any error comes back as a tool error instead of crashing.
+// Wrap a handler so errors come back as tool errors instead of crashing.
 function tool(fn) {
   return async (args) => {
     try {
@@ -34,7 +28,8 @@ function tool(fn) {
         content: [
           {
             type: 'text',
-            text: `Blaze error: ${err.message}` +
+            text:
+              `Blaze error: ${err.message}` +
               (err.body ? `\n${JSON.stringify(err.body, null, 2)}` : ''),
           },
         ],
@@ -44,56 +39,36 @@ function tool(fn) {
 }
 
 server.registerTool(
-  'generate_content',
+  'ping',
   {
-    title: 'Generate content',
-    description: 'Generate marketing content (post, blog, caption) with Blaze.ai.',
-    inputSchema: {
-      prompt: z.string().describe('What to write about'),
-      contentType: z.string().optional().describe('e.g. "post", "blog", "caption"'),
-      channel: z.string().optional().describe('Target channel, e.g. "instagram"'),
-    },
+    title: 'Ping Blaze',
+    description: 'Health check against the Blaze GraphQL API.',
+    inputSchema: {},
   },
-  tool((args) => generateContent(args))
+  tool(() => ping())
 );
 
 server.registerTool(
-  'schedule_campaign',
+  'introspect',
   {
-    title: 'Schedule campaign',
-    description: 'Schedule a content item onto the Blaze.ai calendar.',
-    inputSchema: {
-      contentId: z.string().describe('ID of the content to schedule'),
-      date: z.string().describe('ISO date/time to publish'),
-      channel: z.string().optional().describe('Channel to publish to'),
-    },
+    title: 'Introspect schema',
+    description: 'List the GraphQL queries the API exposes (sentiment, engagement, segments, etc.).',
+    inputSchema: {},
   },
-  tool((args) => scheduleCampaign(args))
+  tool(() => introspect())
 );
 
 server.registerTool(
-  'get_content',
+  'graphql_query',
   {
-    title: 'Get content',
-    description: 'Fetch existing content/campaigns from Blaze.ai.',
+    title: 'Run GraphQL',
+    description: 'Run an arbitrary Blaze GraphQL query/mutation with optional variables.',
     inputSchema: {
-      status: z.string().optional().describe('Filter by status, e.g. "published"'),
-      limit: z.number().optional().describe('Max items to return'),
+      query: z.string().describe('The GraphQL query or mutation string'),
+      variables: z.record(z.any()).optional().describe('JSON variables for the query'),
     },
   },
-  tool((args) => getContent(args))
-);
-
-server.registerTool(
-  'audit_apps',
-  {
-    title: 'Audit apps',
-    description: 'List previously designed and upcoming apps/projects in Blaze.ai.',
-    inputSchema: {
-      status: z.string().optional().describe('e.g. "all", "past", "upcoming"'),
-    },
-  },
-  tool((args) => auditApps(args))
+  tool(({ query, variables }) => graphql(query, variables))
 );
 
 const transport = new StdioServerTransport();

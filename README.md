@@ -1,39 +1,43 @@
 This is a starter template for [Learn Next.js](https://nextjs.org/learn).
 
-## Blaze.ai integration
+## Blaze integration
 
-Server-side access to the [Blaze.ai](https://www.blaze.ai) API. The API key
-stays on the server and is never exposed to the browser. No Zapier required.
+Server-side access to the [Blaze](https://app.blaze.ai) **GraphQL** API
+(`api.withblaze.app`). The API key stays on the server and is never exposed
+to the browser. No Zapier required.
+
+The API exposes dashboard data — sentiment, engagement, segments — and is in
+**Alpha**. It does not currently offer content generation or scheduling.
 
 ### Setup
 
-1. In Blaze.ai, generate a workspace key: **Workspace avatar → Settings →
-   Integrations → New Key**.
+1. Request an API key (Alpha): email `chirag@withblaze.app` from the email
+   registered on your Blaze account, with your account identifier.
 2. Copy `.env.example` to `.env.local` and set `BLAZE_API_KEY`.
-3. Blaze.ai doesn't publish an open REST spec, so the endpoint paths in
-   `lib/blaze.js` are placeholders. Once you have Blaze's real paths/auth,
-   override them via the env vars listed in `.env.example` (no code changes).
 
 ### Usage
 
-From the browser, hit the authenticated proxy — the key is attached
-server-side:
+From the browser, POST GraphQL to the proxy — the key is attached server-side:
 
 ```js
-await fetch('/api/blaze/v1/content/generate', {
+await fetch('/api/blaze/graphql', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ prompt: 'Product launch announcement' }),
+  body: JSON.stringify({ query: 'query Ping { ping { status } }' }),
 });
 ```
 
-From server code (API routes, `getServerSideProps`), use the typed helpers:
+From server code (API routes, `getServerSideProps`):
 
 ```js
-import { generateContent, scheduleCampaign, getContent, auditApps } from '../lib/blaze';
+import { graphql, ping, introspect } from '../lib/blaze';
 
-await generateContent({ prompt: 'Spring campaign caption' });
-await scheduleCampaign({ contentId: '123', date: '2026-06-10' });
-await getContent({ status: 'published' });
-await auditApps({ status: 'all' });
+await ping();                       // health check
+await introspect();                 // discover available queries
+await graphql('query { /* ... */ }', { /* variables */ });
 ```
+
+### MCP server
+
+`blaze-mcp/` is a standalone MCP server exposing `ping`, `introspect`, and
+`graphql_query` tools. See `blaze-mcp/README.md`.
