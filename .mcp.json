@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "blaze": {
+      "command": "node",
+      "args": ["blaze-mcp/server.js"],
+      "env": {
+        "BLAZE_API_KEY": "${BLAZE_API_KEY}"
+      }
+    }
+  }
+}
